@@ -6,11 +6,7 @@ function _interpolate!(
         derivative_orders::NTuple{N_in, <:Integer},
         multi_point_index
 ) where {N_in, N_out, ID <: LinearInterpolationDimension}
-    if iszero(N_out)
-        out = zero(out)
-    else
-        out .= 0
-    end
+    out = make_zero(out)
     any(>(1), derivative_orders) && return out
 
     tᵢ = ntuple(i -> A.interp_dims[i].t[idx[i]], N_in)
@@ -67,6 +63,7 @@ function _interpolate!(
     return out
 end
 
+# BSpline evaluation
 function _interpolate!(
         out,
         A::NDInterpolation{N_in, N_out, ID},
@@ -77,19 +74,10 @@ function _interpolate!(
 ) where {N_in, N_out, ID <: BSplineInterpolationDimension}
     (; interp_dims) = A
 
-    if iszero(N_out)
-        out = zero(out)
-    else
-        out .= 0
-    end
-
+    out = make_zero(out)
     degrees = ntuple(dim_in -> interp_dims[dim_in].degree, N_in)
-
-    basis_function_vals = ntuple(
-        dim_in -> get_basis_function_values(
-            interp_dims[dim_in], t[dim_in], idx[dim_in], derivative_orders[dim_in], multi_point_index, dim_in
-        ),
-        N_in
+    basis_function_vals = get_basis_function_values_all(
+        A, t, idx, derivative_orders, multi_point_index
     )
 
     for I in CartesianIndices(ntuple(dim_in -> 1:(degrees[dim_in] + 1), N_in))
@@ -101,6 +89,48 @@ function _interpolate!(
         else
             out .+= B_product * view(A.u, cp_index..., ..)
         end
+    end
+
+    return out
+end
+
+# NURBS evaluation
+function _interpolate!(
+        out,
+        A::NDInterpolation{N_in, N_out, ID, <:NURBSWeights},
+        t::Tuple{Vararg{Number, N_in}},
+        idx::NTuple{N_in, <:Integer},
+        derivative_orders::NTuple{N_in, <:Integer},
+        multi_point_index
+) where {N_in, N_out, ID <: BSplineInterpolationDimension}
+    (; interp_dims, global_cache) = A
+
+    out = make_zero(out)
+    degrees = ntuple(dim_in -> interp_dims[dim_in].degree, N_in)
+    basis_function_vals = get_basis_function_values_all(
+        A, t, idx, derivative_orders, multi_point_index
+    )
+
+    denom = zero(eltype(t))
+
+    for I in CartesianIndices(ntuple(dim_in -> 1:(degrees[dim_in] + 1), N_in))
+        B_product = prod(dim_in -> basis_function_vals[dim_in][I[dim_in]], 1:N_in)
+        cp_index = ntuple(
+            dim_in -> idx[dim_in] + I[dim_in] - degrees[dim_in] - 1, N_in)
+        weight = global_cache.weights[cp_index...]
+        product = weight * B_product
+        denom += product
+        if iszero(N_out)
+            out += product * A.u[cp_index...]
+        else
+            out .+= product * view(A.u, cp_index..., ..)
+        end
+    end
+
+    if iszero(N_out)
+        out /= denom
+    else
+        out ./= denom
     end
 
     return out

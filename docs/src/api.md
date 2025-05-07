@@ -7,6 +7,7 @@ NDInterpolation
 LinearInterpolationDimension
 ConstantInterpolationDimension
 BSplineInterpolationDimension
+NURBSWeights
 ```
 
 ## Multi-point evaluation

@@ -121,6 +121,22 @@ function get_basis_function_values(
         multi_point_index[dim_in], :, derivative_order + 1)
 end
 
+# Get all basis function values to evaluate a BSpline interpolation in t
+function get_basis_function_values_all(
+        A::NDInterpolation{N_in, N_out, <:BSplineInterpolationDimension},
+        t::Tuple{Vararg{Number, N_in}},
+        idx::NTuple{N_in, <:Integer},
+        derivative_orders::NTuple{N_in, <:Integer},
+        multi_point_index
+) where {N_in, N_out}
+    ntuple(
+        dim_in -> get_basis_function_values(
+            A.interp_dims[dim_in], t[dim_in], idx[dim_in], derivative_orders[dim_in], multi_point_index, dim_in
+        ),
+        N_in
+    )
+end
+
 function set_basis_function_eval!(itp_dim::BSplineInterpolationDimension)::Nothing
     backend = get_backend(itp_dim.t_eval)
     basis_function_eval_kernel(backend)(
@@ -137,8 +153,8 @@ end
     i, derivative_order_plus_1 = @index(Global, NTuple)
 
     itp_dim.basis_function_eval[i,
-        :,
-        derivative_order_plus_1] .= get_basis_function_values(
+    :,
+    derivative_order_plus_1] .= get_basis_function_values(
         itp_dim,
         itp_dim.t_eval[i],
         itp_dim.idx_eval[i],
@@ -180,4 +196,13 @@ end
 
 function get_n_basis_functions(itp_dim::BSplineInterpolationDimension)
     length(itp_dim.knots_all) - itp_dim.degree - 1
+end
+
+"""
+    NURBSWeights(weights::AbstractArray)
+
+Weights associated with the control points to define a NURBS geometry.
+"""
+struct NURBSWeights{W <: AbstractArray} <: AbstractGlobalCache
+    weights::W
 end

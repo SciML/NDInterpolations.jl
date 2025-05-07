@@ -4,26 +4,30 @@ Base.length(itp_dim::AbstractInterpolationDimension) = length(itp_dim.t)
 
 function validate_derivative_orders(
         derivative_orders::NTuple{N_in, <:Integer},
-        ::NTuple{N_in, <:AbstractInterpolationDimension};
-        multi_point::Bool = false
+        ::NDInterpolation{N_in};
+        kwargs...
 ) where {N_in}
     @assert all(≥(0), derivative_orders) "Derivative orders must me non-negative."
 end
 
 function validate_derivative_orders(
         derivative_orders::NTuple{N_in, <:Integer},
-        interp_dims::NTuple{N_in, <:BSplineInterpolationDimension};
+        A::NDInterpolation{N_in, N_out, <:BSplineInterpolationDimension};
         multi_point::Bool = false
-) where {N_in}
+) where {N_in, N_out}
     @assert all(≥(0), derivative_orders) "Derivative orders must me non-negative."
 
     if multi_point
         @assert all(
-            i -> derivative_orders[i] ≤ interp_dims[i].max_derivative_order_eval, 1:N_in
+            i -> derivative_orders[i] ≤ A.interp_dims[i].max_derivative_order_eval, 1:N_in
         ) "For BSpline interpolation, when using multi-point evaluation the derivative orders cannot be \
         larger than the `max_derivative_order_eval` eval of of the `BSplineInterpolationDimension`. If you want \
         to compute higher order multi-point derivatives, pass a larger `max_derivative_order_eval` to the \
         `BSplineInterpolationDimension` constructor(s)."
+    end
+
+    if A.global_cache isa NURBSWeights
+        @assert all(==(0), derivative_orders) "Currently partial derivatives of NURBS are not supported."
     end
 end
 
@@ -47,6 +51,26 @@ function validate_size_u(
     @assert expected_size==size(u)[1:N_in] "Expected the size of the first N_in dimensions of u to be $expected_size based on the BSplineInterpolation properties."
 end
 
+function validate_global_cache(
+        ::TrivialGlobalCache, ::NTuple{N_in, ID}, ::AbstractArray
+) where {N_in, ID}
+    nothing
+end
+
+function validate_global_cache(
+        nurbs_weights::NURBSWeights,
+        ::NTuple{N_in, BSplineInterpolationDimension},
+        u::AbstractArray
+) where {N_in}
+    size_expected = size(u)[1:N_in]
+    @assert size(nurbs_weights.weights)==size_expected "The size of the weights array must match the length of the first N_in dimensions of u ($size_expected)."
+end
+
+function validate_global_cache(
+        ::gType, ::NTuple{N_in, ID}, ::AbstractArray) where {gType, N_in, ID}
+    @error("Interpolation dimension type $ID is not compatible with global cache type $gType.")
+end
+
 function get_ts(interp_dims::NTuple{
         N_in, AbstractInterpolationDimension}) where {N_in}
     ntuple(i -> interp_dims[i].t, N_in)
@@ -54,6 +78,13 @@ end
 
 function get_output_size(interp::NDInterpolation{N_in}) where {N_in}
     size(interp.u)[(N_in + 1):end]
+end
+
+make_zero(::T) where {T <: Number} = zero(T)
+
+function make_zero(v::T) where {T <: AbstractArray}
+    v .= 0
+    v
 end
 
 function make_out(

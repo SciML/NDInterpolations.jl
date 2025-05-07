@@ -36,7 +36,7 @@ function eval_unstructured!(
         interp::NDInterpolation{N_in};
         derivative_orders::NTuple{N_in, <:Integer} = ntuple(_ -> 0, N_in)
 ) where {N_in}
-    validate_derivative_orders(derivative_orders, interp.interp_dims; multi_point = true)
+    validate_derivative_orders(derivative_orders, interp; multi_point = true)
     backend = get_backend(out)
     @assert all(i -> length(interp.interp_dims[i].t_eval) == size(out, 1), N_in) "The t_eval of all interpolation dimensions must have the same length as the first dimension of out."
     @assert size(out)[2:end]==get_output_size(interp) "The size of the last N_out dimensions of out must be the same as the output size of the interpolation."
@@ -87,7 +87,7 @@ function eval_grid!(
         interp::NDInterpolation{N_in};
         derivative_orders::NTuple{N_in, <:Integer} = ntuple(_ -> 0, N_in)
 ) where {N_in}
-    validate_derivative_orders(derivative_orders, interp.interp_dims; multi_point = true)
+    validate_derivative_orders(derivative_orders, interp; multi_point = true)
     backend = get_backend(out)
     @assert all(i -> size(out, i) == length(interp.interp_dims[i].t_eval), N_in) "For the first N_in dimensions of out the length must match the t_eval of the corresponding interpolation dimension."
     @assert size(out)[(N_in + 1):end]==get_output_size(interp) "The size of the last N_out dimensions of out must be the same as the output size of the interpolation."
